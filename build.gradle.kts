@@ -31,18 +31,19 @@ tasks {
   }
 
   val javadocJar by creating(Jar::class) {
-    dependsOn("javadoc")
+    dependsOn(javadoc)
     define(classifier = "javadoc")
     from(javadoc)
   }
 
   val sourcesJar by creating(Jar::class) {
-    dependsOn("classes")
+    dependsOn(classes)
     define(classifier = "sources")
     from(sourceSets["main"].allSource)
   }
 
   build {
+    dependsOn(jar)
     dependsOn(sourcesJar)
     dependsOn(javadocJar)
   }
