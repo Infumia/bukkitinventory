@@ -52,6 +52,7 @@ tasks {
 repositories {
   mavenCentral()
   maven(SNAPSHOTS)
+  maven(PAPERMC)
   mavenLocal()
 }
 
@@ -67,6 +68,8 @@ dependencies {
 
   testAnnotationProcessor(lombokLibrary)
   testAnnotationProcessor(annotationsLibrary)
+
+  compileOnlyApi("io.papermc.paper:paper-api:1.18.2-R0.1-SNAPSHOT")
 }
 
 publishing {
