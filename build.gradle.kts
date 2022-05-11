@@ -3,6 +3,7 @@ plugins {
   `java-library`
   `maven-publish`
   signing
+  checkstyle
   id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 }
 
@@ -14,6 +15,10 @@ java {
   toolchain {
     languageVersion.set(JavaLanguageVersion.of(17))
   }
+}
+
+checkstyle {
+  configFile = file("checkstyle.xml")
 }
 
 tasks {

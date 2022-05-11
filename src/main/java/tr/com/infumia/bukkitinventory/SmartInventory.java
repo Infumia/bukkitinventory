@@ -6,16 +6,25 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
-import tr.com.infumia.bukkitinventory.event.PgTickEvent;
+import org.jetbrains.annotations.Nullable;
+import tr.com.infumia.bukkitinventory.event.PageTickEvent;
 import tr.com.infumia.bukkitinventory.listener.InventoryClickListener;
 import tr.com.infumia.bukkitinventory.listener.InventoryCloseListener;
 import tr.com.infumia.bukkitinventory.listener.InventoryDragListener;
@@ -27,34 +36,59 @@ import tr.com.infumia.bukkitinventory.opener.ChestInventoryOpener;
 /**
  * a class that manages all smart inventories.
  */
-public interface SmartInventory {
+@Getter
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+public final class SmartInventory {
 
   /**
    * default inventory openers.
    */
-  List<InventoryOpener> DEFAULT_OPENERS = Collections.singletonList(
+  private static final List<InventoryOpener> DEFAULT_OPENERS = Collections.singletonList(
     new ChestInventoryOpener());
 
   /**
    * all listener to register.
    */
-  List<Listener> LISTENERS = Arrays.asList(
-    new InventoryClickListener(),
-    new InventoryOpenListener(),
-    new InventoryCloseListener(),
-    new PlayerQuitListener(),
-    new PluginDisableListener(),
-    new InventoryDragListener());
+  private static final Function<Plugin, List<Listener>> LISTENERS = plugin -> Arrays.asList(
+    new InventoryClickListener(plugin),
+    new InventoryOpenListener(plugin),
+    new InventoryCloseListener(plugin),
+    new PlayerQuitListener(plugin),
+    new PluginDisableListener(plugin),
+    new InventoryDragListener(plugin));
+
+  /**
+   * the openers.
+   */
+  private final Collection<InventoryOpener> openers = new ArrayList<>();
+
+  /**
+   * the plugin.
+   */
+  @NotNull
+  private final Plugin plugin;
+
+  /**
+   * the tasks.
+   */
+  private final Map<UUID, BukkitTask> tasks = new ConcurrentHashMap<>();
+
+  static {
+    try {
+      Class.forName("tr.com.infumia.bukkitinventory.event.PluginDisabledEvent");
+    } catch (final ClassNotFoundException e) {
+      e.printStackTrace();
+    }
+  }
 
   /**
    * closes all the smart inventories which are opened.
    */
-  static void closeAllSmartInventories() {
-    for (final var player : Bukkit.getOnlinePlayers()) {
-      if (SmartInventory.getHolder(player).isPresent()) {
-        player.closeInventory();
-      }
-    }
+  public static void closeAllSmartInventories() {
+    Bukkit.getOnlinePlayers().stream()
+      .filter(player -> SmartInventory.getHolder(player).isPresent())
+      .forEach(HumanEntity::closeInventory);
   }
 
   /**
@@ -65,13 +99,13 @@ public interface SmartInventory {
    * @return smart holder.
    */
   @NotNull
-  static Optional<SmartHolder> getHolder(@NotNull final Player player) {
+  public static Optional<SmartHolder> getHolder(@NotNull final Player player) {
     final var holder = player.getOpenInventory().getTopInventory().getHolder();
     if (!(holder instanceof SmartHolder)) {
       return Optional.empty();
     }
     return Optional.of((SmartHolder) holder)
-      .filter(SmartHolder::isActive);
+      .filter(SmartHolder::active);
   }
 
   /**
@@ -82,9 +116,21 @@ public interface SmartInventory {
    * @return smart holder.
    */
   @NotNull
-  static Optional<SmartHolder> getHolder(@NotNull final UUID uniqueId) {
+  public static Optional<SmartHolder> getHolder(@NotNull final UUID uniqueId) {
     return Optional.ofNullable(Bukkit.getPlayer(uniqueId))
       .flatMap(SmartInventory::getHolder);
+  }
+
+  /**
+   * obtains the given {@code player}'s smart holder.
+   *
+   * @param player the player to obtain.
+   *
+   * @return smart holder.
+   */
+  @Nullable
+  public static SmartHolder getHolderOrNull(@NotNull final Player player) {
+    return SmartInventory.getHolder(player).orElse(null);
   }
 
   /**
@@ -93,12 +139,11 @@ public interface SmartInventory {
    * @return smart holders of online players.
    */
   @NotNull
-  static List<SmartHolder> getHolders() {
-    final var list = new ArrayList<SmartHolder>();
-    for (final var player : Bukkit.getOnlinePlayers()) {
-      SmartInventory.getHolder(player).ifPresent(list::add);
-    }
-    return list;
+  public static List<SmartHolder> getHolders() {
+    return Bukkit.getOnlinePlayers().stream()
+      .map(SmartInventory::getHolderOrNull)
+      .filter(Objects::nonNull)
+      .toList();
   }
 
   /**
@@ -109,53 +154,33 @@ public interface SmartInventory {
    * @return a player list.
    */
   @NotNull
-  static List<Player> getOpenedPlayers(@NotNull final Page page) {
-    final var list = new ArrayList<Player>();
-    for (final var holder : SmartInventory.getHolders()) {
-      if (page.id().equals(holder.getPage().id())) {
-        list.add(holder.getPlayer());
-      }
-    }
-    return list;
+  public static List<Player> getOpenedPlayers(@NotNull final Page page) {
+    return SmartInventory.getHolders().stream()
+      .filter(holder -> page.id().equals(holder.page().id()))
+      .map(SmartHolder::player)
+      .toList();
   }
 
   /**
-   * runs {@link InventoryProvider#update(InventoryContents)} method of the player's page.
+   * notifies update for the player's inventory.
    *
    * @param player the player to notify.
    */
-  static void notifyUpdate(@NotNull final Player player) {
+  public static void notifyUpdate(@NotNull final Player player) {
     SmartInventory.getHolder(player).ifPresent(smartHolder ->
-      smartHolder.getContents().notifyUpdate());
+      smartHolder.context().notifyUpdate());
   }
 
   /**
-   * runs {@link InventoryProvider#update(InventoryContents)} method of the given provider's class.
-   *
-   * @param provider the provider to notify.
-   * @param <T> type of the class.
-   */
-  static <T extends InventoryProvider> void notifyUpdateForAll(@NotNull final Class<T> provider) {
-    for (final var smartHolder : SmartInventory.getHolders()) {
-      final var contents = smartHolder.getContents();
-      if (provider.equals(contents.page().provider().getClass())) {
-        contents.notifyUpdate();
-      }
-    }
-  }
-
-  /**
-   * runs {@link InventoryProvider#update(InventoryContents)} method of the page called the given id.
+   * notifies for all page with the id.
    *
    * @param id the id to find and run the update method.
    */
-  static void notifyUpdateForAllById(@NotNull final String id) {
-    for (final var smartHolder : SmartInventory.getHolders()) {
-      final var page = smartHolder.getPage();
-      if (page.id().equals(id)) {
-        page.notifyUpdateForAll();
-      }
-    }
+  public static void notifyUpdateForAllById(@NotNull final String id) {
+    SmartInventory.getHolders().stream()
+      .map(SmartHolder::page)
+      .filter(page -> page.id().equals(id))
+      .forEach(Page::notifyUpdateForAll);
   }
 
   /**
@@ -166,8 +191,8 @@ public interface SmartInventory {
    * @return the inventory opener from the given type.
    */
   @NotNull
-  default Optional<InventoryOpener> findOpener(@NotNull final InventoryType type) {
-    for (final var opener : this.getOpeners()) {
+  public Optional<InventoryOpener> findOpener(@NotNull final InventoryType type) {
+    for (final var opener : this.openers) {
       if (opener.supports(type)) {
         return Optional.of(opener);
       }
@@ -181,20 +206,52 @@ public interface SmartInventory {
   }
 
   /**
-   * obtains inventory openers.
-   *
-   * @return inventory openers.
+   * initiates the manager.
    */
-  @NotNull
-  Collection<InventoryOpener> getOpeners();
+  public void init() {
+    SmartInventory.LISTENERS.apply(this.plugin).forEach(listener ->
+      Bukkit.getPluginManager().registerEvents(listener, this.plugin));
+  }
 
   /**
-   * obtains the plugin.
+   * registers the given inventory openers.
    *
-   * @return the plugin.
+   * @param openers the openers to register.
    */
-  @NotNull
-  Plugin getPlugin();
+  public void registerOpeners(@NotNull final InventoryOpener... openers) {
+    Collections.addAll(this.openers, openers);
+  }
+
+  /**
+   * removes given uniqueId of the ticking task.
+   *
+   * @param uniqueId the uniqueId to set.
+   */
+  public void removeTask(@NotNull final UUID uniqueId) {
+    this.tasks.remove(uniqueId);
+  }
+
+  /**
+   * stops the ticking of the given uniqueId.
+   *
+   * @param uniqueId the uniqueId to stop.
+   */
+  public void stopTick(@NotNull final UUID uniqueId) {
+    this.task(uniqueId).ifPresent(runnable -> {
+      Bukkit.getScheduler().cancelTask(runnable.getTaskId());
+      this.removeTask(uniqueId);
+    });
+  }
+
+  /**
+   * sets the given player of the ticking task to the given task.
+   *
+   * @param uniqueId the unique id to set.
+   * @param task the task to set.
+   */
+  public void task(@NotNull final UUID uniqueId, @NotNull final BukkitTask task) {
+    this.tasks.put(uniqueId, task);
+  }
 
   /**
    * obtains the given uniqueId's task.
@@ -204,64 +261,8 @@ public interface SmartInventory {
    * @return a {@link BukkitRunnable} instance.
    */
   @NotNull
-  default Optional<BukkitRunnable> getTask(@NotNull final UUID uniqueId) {
-    return Optional.ofNullable(this.getTasks().get(uniqueId));
-  }
-
-  /**
-   * obtains the tasks.
-   *
-   * @return tasks.
-   */
-  @NotNull
-  Map<UUID, BukkitRunnable> getTasks();
-
-  /**
-   * initiates the manager.
-   */
-  default void init() {
-    SmartInventory.LISTENERS.forEach(listener ->
-      Bukkit.getPluginManager().registerEvents(listener, this.getPlugin()));
-  }
-
-  /**
-   * registers the given inventory openers.
-   *
-   * @param openers the openers to register.
-   */
-  default void registerOpeners(@NotNull final InventoryOpener... openers) {
-    this.getOpeners().addAll(Arrays.asList(openers));
-  }
-
-  /**
-   * removes given uniqueId of the ticking task.
-   *
-   * @param uniqueId the uniqueId to set.
-   */
-  default void removeTask(@NotNull final UUID uniqueId) {
-    this.getTasks().remove(uniqueId);
-  }
-
-  /**
-   * sets the given player of the ticking task to the given task.
-   *
-   * @param uniqueId the unique id to set.
-   * @param task the task to set.
-   */
-  default void setTask(@NotNull final UUID uniqueId, @NotNull final BukkitRunnable task) {
-    this.getTasks().put(uniqueId, task);
-  }
-
-  /**
-   * stops the ticking of the given uniqueId.
-   *
-   * @param uniqueId the uniqueId to stop.
-   */
-  default void stopTick(@NotNull final UUID uniqueId) {
-    this.getTask(uniqueId).ifPresent(runnable -> {
-      Bukkit.getScheduler().cancelTask(runnable.getTaskId());
-      this.removeTask(uniqueId);
-    });
+  public Optional<BukkitTask> task(@NotNull final UUID uniqueId) {
+    return Optional.ofNullable(this.tasks.get(uniqueId));
   }
 
   /**
@@ -270,24 +271,22 @@ public interface SmartInventory {
    * @param uniqueId the unique id to start.
    * @param page the page to start.
    */
-  default void tick(@NotNull final UUID uniqueId, @NotNull final Page page) {
-    final var task = new BukkitRunnable() {
+  public void tick(@NotNull final UUID uniqueId, @NotNull final Page page) {
+    final var task = new Runnable() {
       @Override
       public void run() {
         SmartInventory.getHolder(uniqueId)
-          .map(SmartHolder::getContents)
-          .ifPresent(contents -> {
-            page.accept(new PgTickEvent(contents));
-            page.provider().tick(contents);
-          });
+          .map(SmartHolder::context)
+          .ifPresent(context -> page.accept(new PageTickEvent(context, SmartInventory.this.plugin)));
       }
     };
-    this.setTask(uniqueId, task);
+    final BukkitTask bukkitTask;
     if (page.async()) {
-      task.runTaskTimerAsynchronously(this.getPlugin(), page.startDelay(), page.tick());
+      bukkitTask = Bukkit.getScheduler().runTaskTimerAsynchronously(this.plugin, task, page.startDelay(), page.tick());
     } else {
-      task.runTaskTimer(this.getPlugin(), page.startDelay(), page.tick());
+      bukkitTask = Bukkit.getScheduler().runTaskTimer(this.plugin, task, page.startDelay(), page.tick());
     }
+    this.task(uniqueId, bukkitTask);
   }
 
   /**
@@ -295,7 +294,7 @@ public interface SmartInventory {
    *
    * @param openers the openers to unregister.
    */
-  default void unregisterOpeners(@NotNull final InventoryOpener... openers) {
-    this.getOpeners().removeAll(Arrays.asList(openers));
+  public void unregisterOpeners(@NotNull final InventoryOpener... openers) {
+    this.openers.removeAll(Arrays.asList(openers));
   }
 }

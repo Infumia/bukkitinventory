@@ -1,16 +1,20 @@
 package tr.com.infumia.bukkitinventory.listener;
 
-import lombok.RequiredArgsConstructor;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
 import tr.com.infumia.bukkitinventory.SmartInventory;
 
 /**
  * a class that represents inventory close listeners.
+ *
+ * @param plugin the plugin.
  */
-@RequiredArgsConstructor
-public final class InventoryCloseListener implements Listener {
+public record InventoryCloseListener(
+  @NotNull Plugin plugin
+) implements Listener {
 
   /**
    * listens inventory close events.
@@ -19,7 +23,11 @@ public final class InventoryCloseListener implements Listener {
    */
   @EventHandler
   public void onInventoryClose(final InventoryCloseEvent event) {
-    SmartInventory.getHolder(event.getPlayer().getUniqueId()).ifPresent(holder ->
-      holder.getPage().close(holder));
+    final var holderOptional = SmartInventory.getHolder(event.getPlayer().getUniqueId());
+    if (holderOptional.isEmpty()) {
+      return;
+    }
+    final var holder = holderOptional.get();
+    holder.page().close(holder);
   }
 }

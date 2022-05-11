@@ -10,17 +10,17 @@ import org.jetbrains.annotations.NotNull;
 public interface InventoryOpener {
 
   /**
-   * fills the given contents to the given inventory.
+   * fills the given context to the given inventory.
    *
    * @param inventory the inventory to fill.
-   * @param contents the contents to fill.
+   * @param context the context to fill.
    */
-  default void fill(@NotNull final Inventory inventory, @NotNull final InventoryContents contents) {
-    final var items = contents.all();
+  default void fill(@NotNull final Inventory inventory, @NotNull final InventoryContext context) {
+    final var items = context.all();
     for (var row = 0; row < items.length; row++) {
       for (var column = 0; column < items[row].length; column++) {
         if (items[row][column] != null) {
-          inventory.setItem(9 * row + column, items[row][column].calculateItem(contents));
+          inventory.setItem(9 * row + column, items[row][column].calculateItem(context));
         }
       }
     }
@@ -29,12 +29,12 @@ public interface InventoryOpener {
   /**
    * opens the page for the given player.
    *
-   * @param contents the contents to open.
+   * @param context the context to open.
    *
    * @return opened inventory itself.
    */
   @NotNull
-  Inventory open(@NotNull InventoryContents contents);
+  Inventory open(@NotNull InventoryContext context);
 
   /**
    * checks if the inventory type is supporting for {@code this}.

@@ -1,5 +1,9 @@
 package tr.com.infumia.bukkitinventory;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -9,20 +13,27 @@ import org.jetbrains.annotations.NotNull;
 /**
  * an interface to determine inventory holders.
  */
-public interface SmartHolder extends InventoryHolder {
+@Getter
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+public final class SmartHolder implements InventoryHolder {
 
   /**
-   * obtains the contents.
-   *
-   * @return contents.
+   * the contents.
    */
   @NotNull
-  InventoryContents getContents();
+  private final InventoryContext context;
+
+  /**
+   * the active.
+   */
+  @Setter
+  private boolean active = true;
 
   @Override
   @NotNull
-  default Inventory getInventory() {
-    return this.getContents().getTopInventory();
+  public Inventory getInventory() {
+    return this.context.topInventory();
   }
 
   /**
@@ -31,8 +42,8 @@ public interface SmartHolder extends InventoryHolder {
    * @return page.
    */
   @NotNull
-  default Page getPage() {
-    return this.getContents().page();
+  public Page page() {
+    return this.context().page();
   }
 
   /**
@@ -41,8 +52,8 @@ public interface SmartHolder extends InventoryHolder {
    * @return player.
    */
   @NotNull
-  default Player getPlayer() {
-    return this.getContents().player();
+  public Player player() {
+    return this.context().player();
   }
 
   /**
@@ -51,21 +62,7 @@ public interface SmartHolder extends InventoryHolder {
    * @return plugin.
    */
   @NotNull
-  default Plugin getPlugin() {
-    return this.getPage().inventory().getPlugin();
+  public Plugin plugin() {
+    return this.page().inventory().plugin();
   }
-
-  /**
-   * checks if the holder is active.
-   *
-   * @return {@code true} if the holder is active.
-   */
-  boolean isActive();
-
-  /**
-   * sets the active.
-   *
-   * @param active the active to set.
-   */
-  void setActive(boolean active);
 }

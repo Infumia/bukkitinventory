@@ -1,29 +1,36 @@
 package tr.com.infumia.bukkitinventory;
 
+import java.util.Arrays;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * a class which lets you switch pages;
- * easily get icons in the given page,
- * easily manipulate the pages and
- * check if a page is the first or the last one
- * ({@link Pagination#isFirst()} / {@link Pagination#isLast()}).
- * <p>
- * you must start by setting the {@link Pagination#setIcons(Icon...)} and the {@link Pagination#setIconsPerPage(int)},
- * then you can manipulate the pages by using the
- * {@link Pagination#page(int)} /
- * {@link Pagination#first()} /
- * {@link Pagination#previous()} /
- * {@link Pagination#next()} /
- * {@link Pagination#last()}
- * methods.
- * <p>
- * then, when you need to get all the icons of the current page,
- * either use the {@link Pagination#getPageIcons()} method, or directly
- * add the icons to your inventory with a {@link SlotIterator} and the
- * method {@link Pagination#addToIterator(SlotIterator)}.
+ * a class that represents pagination.
  */
-public interface Pagination {
+@Accessors(fluent = true)
+public final class Pagination {
+
+  /**
+   * the current page.
+   */
+  @Getter
+  @Setter
+  private int currentPage;
+
+  /**
+   * the icons.
+   */
+  @NotNull
+  private Icon[] icons = new Icon[0];
+
+  /**
+   * the icons per page.
+   */
+  @Setter
+  @Getter
+  private int iconsPerPage = 5;
 
   /**
    * adds all the current page icons to the given iterator.
@@ -33,7 +40,7 @@ public interface Pagination {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  default Pagination addToIterator(@NotNull final SlotIterator iterator) {
+  public Pagination addToIterator(@NotNull final SlotIterator iterator) {
     for (final var item : this.getPageIcons()) {
       iterator.next().set(item);
       if (iterator.ended()) {
@@ -51,14 +58,10 @@ public interface Pagination {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  Pagination first();
-
-  /**
-   * gets the current page.
-   *
-   * @return the current page.
-   */
-  int getPage();
+  public Pagination first() {
+    this.currentPage = 0;
+    return this;
+  }
 
   /**
    * gets the icons of the current page.
@@ -68,7 +71,11 @@ public interface Pagination {
    * @return the current page icons.
    */
   @NotNull
-  Icon[] getPageIcons();
+  public Icon[] getPageIcons() {
+    return Arrays.copyOfRange(this.icons,
+      this.currentPage * this.iconsPerPage,
+      (this.currentPage + 1) * this.iconsPerPage);
+  }
 
   /**
    * checks if the current page is the first page.
@@ -77,7 +84,9 @@ public interface Pagination {
    *
    * @return {@code true} if this page is the first page.
    */
-  boolean isFirst();
+  public boolean isFirst() {
+    return this.currentPage == 0;
+  }
 
   /**
    * checks if the current page is the last page.
@@ -86,7 +95,9 @@ public interface Pagination {
    *
    * @return {@code true} if this page is the last page.
    */
-  boolean isLast();
+  public boolean isLast() {
+    return this.currentPage >= (int) Math.ceil((double) this.icons.length / (double) this.iconsPerPage) - 1;
+  }
 
   /**
    * sets the current page to the last page.
@@ -96,7 +107,9 @@ public interface Pagination {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  Pagination last();
+  public Pagination last() {
+    return this.currentPage(this.getPageIcons().length / this.iconsPerPage);
+  }
 
   /**
    * sets the current page to the next page,
@@ -105,17 +118,12 @@ public interface Pagination {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  Pagination next();
-
-  /**
-   * sets the current page.
-   *
-   * @param page the current page.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  Pagination page(int page);
+  public Pagination next() {
+    if (!this.isLast()) {
+      this.currentPage++;
+    }
+    return this;
+  }
 
   /**
    * sets the current page to the previous page,
@@ -124,7 +132,12 @@ public interface Pagination {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  Pagination previous();
+  public Pagination previous() {
+    if (!this.isFirst()) {
+      this.currentPage--;
+    }
+    return this;
+  }
 
   /**
    * sets all the icons for this Pagination.
@@ -134,15 +147,8 @@ public interface Pagination {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  Pagination setIcons(@NotNull Icon... icons);
-
-  /**
-   * sets the maximum amount of icons per page.
-   *
-   * @param iconsPerPage the maximum amount of icons per page.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  Pagination setIconsPerPage(int iconsPerPage);
+  public Pagination setIcons(@NotNull final Icon... icons) {
+    this.icons = icons.clone();
+    return this;
+  }
 }

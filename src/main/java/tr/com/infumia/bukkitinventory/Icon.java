@@ -1,45 +1,85 @@
 package tr.com.infumia.bukkitinventory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
-import tr.com.infumia.bukkitinventory.event.abs.ClickEvent;
-import tr.com.infumia.bukkitinventory.event.abs.DragEvent;
-import tr.com.infumia.bukkitinventory.event.abs.IconEvent;
-import tr.com.infumia.bukkitinventory.event.abs.SmartEvent;
-import tr.com.infumia.bukkitinventory.icon.BasicIcon;
+import tr.com.infumia.bukkitinventory.event.IconClickEvent;
+import tr.com.infumia.bukkitinventory.event.IconDragEvent;
+import tr.com.infumia.bukkitinventory.event.base.IconEvent;
+import tr.com.infumia.bukkitinventory.event.base.RealEvent;
 
 /**
- * a class that holds the {@link ItemStack} to put the given inventory.
+ * a class that represents icons.
  */
-public interface Icon {
+@Setter
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+public final class Icon {
 
   /**
    * an empty {@link Icon} instance.
    */
-  Icon EMPTY = Icon.from(new ItemStack(Material.AIR));
+  public static final Icon EMPTY = Icon.from(new ItemStack(Material.AIR));
 
   /**
-   * creates a simple icon from the given {@link ItemStack} with {@link SmartEvent#cancel()} interaction.
+   * the handle list.
+   */
+  private final Collection<Handle<? extends IconEvent<?>>> handles = new ArrayList<>();
+
+  /**
+   * the can see.
+   */
+  @Getter
+  @NotNull
+  private Predicate<InventoryContext> canSee = contents -> true;
+
+  /**
+   * the can use.
+   */
+  @Getter
+  @NotNull
+  private Predicate<InventoryContext> canUse = contents -> true;
+
+  /**
+   * the fallback.
+   */
+  @Getter
+  @NotNull
+  private ItemStack fallback = new ItemStack(Material.AIR);
+
+  /**
+   * the item.
+   */
+  @NotNull
+  private ItemStack item;
+
+  /**
+   * creates a simple icon from the given {@link ItemStack} with {@link RealEvent#cancel()} interaction.
    *
    * @param item the item to create.
    *
    * @return a simple icon instance.
    */
   @NotNull
-  static Icon cancel(@NotNull final ItemStack item) {
+  public static Icon cancel(@NotNull final ItemStack item) {
     return Icon.from(item)
-      .whenInteract(SmartEvent::cancel);
+      .whenClick(RealEvent::cancel)
+      .whenDrag(RealEvent::cancel);
   }
 
   /**
-   * creates a simple icon from the given {@link ItemStack} with a {@link ClickEvent}.
+   * creates a simple icon from the given {@link ItemStack} with a {@link IconClickEvent}.
    *
    * @param item the item to create.
    * @param consumer the consumer to run.
@@ -49,14 +89,14 @@ public interface Icon {
    */
   @NotNull
   @SafeVarargs
-  static Icon click(@NotNull final ItemStack item, @NotNull final Consumer<ClickEvent> consumer,
-                    @NotNull final Predicate<ClickEvent>... requirements) {
+  public static Icon click(@NotNull final ItemStack item, @NotNull final Consumer<IconClickEvent> consumer,
+                           @NotNull final Predicate<IconClickEvent>... requirements) {
     return Icon.from(item)
       .whenClick(consumer, Arrays.asList(requirements));
   }
 
   /**
-   * creates a simple icon from the given {@link ItemStack} with a {@link DragEvent}.
+   * creates a simple icon from the given {@link ItemStack} with a {@link IconDragEvent}.
    *
    * @param item the item to create.
    * @param consumer the consumer to run.
@@ -66,8 +106,8 @@ public interface Icon {
    */
   @NotNull
   @SafeVarargs
-  static Icon drag(@NotNull final ItemStack item, @NotNull final Consumer<DragEvent> consumer,
-                   @NotNull final Predicate<DragEvent>... requirements) {
+  public static Icon drag(@NotNull final ItemStack item, @NotNull final Consumer<IconDragEvent> consumer,
+                          @NotNull final Predicate<IconDragEvent>... requirements) {
     return Icon.from(item)
       .whenDrag(consumer, Arrays.asList(requirements));
   }
@@ -80,82 +120,44 @@ public interface Icon {
    * @return a simple icon instance.
    */
   @NotNull
-  static Icon from(@NotNull final ItemStack item) {
-    return new BasicIcon(item);
+  public static Icon from(@NotNull final ItemStack item) {
+    return new Icon(item);
   }
 
   /**
-   * accepts the upcoming event for all of the handles.
+   * accepts the upcoming event for all the handles.
    *
    * @param event the event to accept.
    * @param <T> type of the event.
    */
-  <T extends IconEvent> void accept(@NotNull T event);
+  public <T extends IconEvent<?>> void accept(@NotNull final T event) {
+    final var contents = event.context();
+    if (this.canSee.test(contents) && this.canUse.test(contents)) {
+      //noinspection unchecked
+      this.handles.stream()
+        .filter(target -> target.cls().isAssignableFrom(event.getClass()))
+        .forEach(target -> ((Handle<T>) target).accept(event));
+    }
+  }
 
   /**
    * calculates and returns the item of the icon.
    * tests the {@code canSee} with the given contents, and if it returns {@code true},
-   * returns {@link #getItem()} else, returns the fallback.
+   * returns {@link #item} else, returns the fallback.
    *
    * @param contents the contents to calculate.
    *
    * @return the calculated item.
    */
   @NotNull
-  ItemStack calculateItem(@NotNull InventoryContents contents);
-
-  /**
-   * sets the canSee value of the icon to the given predicate.
-   *
-   * @param predicate the predicate to set.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  Icon canSee(@NotNull Predicate<InventoryContents> predicate);
-
-  /**
-   * sets the canUse value of the icon to the given predicate.
-   *
-   * @param predicate the predicate to set.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  Icon canUse(@NotNull Predicate<InventoryContents> predicate);
-
-  /**
-   * sets the fallback item of the icon to the given item.
-   *
-   * @param fallback the fallback to set.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  Icon fallback(@NotNull ItemStack fallback);
-
-  /**
-   * obtains the icon's {@link ItemStack}.
-   *
-   * @return the icon's item.
-   */
-  @NotNull
-  ItemStack getItem();
-
-  /**
-   * add the given event and requirements to the icon's handles.
-   *
-   * @param clazz the class to determine the type of the event.
-   * @param consumer the consumer to add.
-   * @param requirements the requirements to add.
-   * @param <T> type of the event.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  default <T extends IconEvent> Icon handle(@NotNull final Class<T> clazz, @NotNull final Consumer<T> consumer,
-                                            @NotNull final List<Predicate<T>> requirements) {
-    return this.handle(Handle.from(clazz, consumer, requirements));
+  public ItemStack calculateItem(@NotNull final InventoryContext contents) {
+    final ItemStack calculated;
+    if (this.canSee.test(contents)) {
+      calculated = this.item;
+    } else {
+      calculated = this.fallback;
+    }
+    return calculated;
   }
 
   /**
@@ -166,7 +168,27 @@ public interface Icon {
    *
    * @return {@code this}, for chained calls.
    */
-  @NotNull <T extends IconEvent> Icon handle(@NotNull Handle<T> handle);
+  @NotNull
+  public <T extends IconEvent<?>> Icon handle(@NotNull final Handle<T> handle) {
+    this.handles.add(handle);
+    return this;
+  }
+
+  /**
+   * add the given event and requirements to the icon's handles.
+   *
+   * @param cls the class to determine the type of the event.
+   * @param consumer the consumer to add.
+   * @param requirements the requirements to add.
+   * @param <T> type of the event.
+   *
+   * @return {@code this}, for chained calls.
+   */
+  @NotNull
+  public <T extends IconEvent<?>> Icon handle(@NotNull final Class<T> cls, @NotNull final Consumer<T> consumer,
+                                              @NotNull final List<Predicate<T>> requirements) {
+    return this.handle(new Handle<>(cls, consumer, requirements));
+  }
 
   /**
    * adds all the given handles into the icon's handle list.
@@ -176,32 +198,35 @@ public interface Icon {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  Icon handles(@NotNull Collection<Handle<? extends IconEvent>> handles);
+  public Icon handles(@NotNull final Collection<Handle<? extends IconEvent<?>>> handles) {
+    this.handles.addAll(handles);
+    return this;
+  }
 
   /**
-   * sets the item of the icon to the given item.
+   * obtains the item.
    *
-   * @param item the item to set.
-   *
-   * @return {@code this}, for chained calls.
+   * @return item.
    */
   @NotNull
-  Icon item(@NotNull ItemStack item);
+  public ItemStack item() {
+    return this.item;
+  }
 
   /**
-   * adds the given {@link ClickEvent} to the icon's handles.
+   * adds the given {@link IconClickEvent} to the icon's handles.
    *
    * @param consumer the consumer to add.
    *
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  default Icon whenClick(@NotNull final Consumer<ClickEvent> consumer) {
+  public Icon whenClick(@NotNull final Consumer<IconClickEvent> consumer) {
     return this.whenClick(consumer, Collections.emptyList());
   }
 
   /**
-   * adds the given {@link ClickEvent} with the requirement to the icon's handles.
+   * adds the given {@link IconClickEvent} with the requirement to the icon's handles.
    *
    * @param consumer the consumer to add.
    * @param requirement the requirement to add.
@@ -209,13 +234,13 @@ public interface Icon {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  default Icon whenClick(@NotNull final Consumer<ClickEvent> consumer,
-                         @NotNull final Predicate<ClickEvent> requirement) {
-    return this.handle(ClickEvent.class, consumer, Collections.singletonList(requirement));
+  public Icon whenClick(@NotNull final Consumer<IconClickEvent> consumer,
+                        @NotNull final Predicate<IconClickEvent> requirement) {
+    return this.handle(IconClickEvent.class, consumer, Collections.singletonList(requirement));
   }
 
   /**
-   * adds the given {@link ClickEvent} with the requirements to the icon's handles.
+   * adds the given {@link IconClickEvent} with the requirements to the icon's handles.
    *
    * @param consumer the consumer to add.
    * @param requirements the requirements to add.
@@ -223,25 +248,25 @@ public interface Icon {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  default Icon whenClick(@NotNull final Consumer<ClickEvent> consumer,
-                         @NotNull final List<Predicate<ClickEvent>> requirements) {
-    return this.handle(ClickEvent.class, consumer, requirements);
+  public Icon whenClick(@NotNull final Consumer<IconClickEvent> consumer,
+                        @NotNull final List<Predicate<IconClickEvent>> requirements) {
+    return this.handle(IconClickEvent.class, consumer, requirements);
   }
 
   /**
-   * adds the given {@link DragEvent} to the icon's handles.
+   * adds the given {@link IconClickEvent} to the icon's handles.
    *
    * @param consumer the consumer to add.
    *
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  default Icon whenDrag(@NotNull final Consumer<DragEvent> consumer) {
+  public Icon whenDrag(@NotNull final Consumer<IconDragEvent> consumer) {
     return this.whenDrag(consumer, Collections.emptyList());
   }
 
   /**
-   * adds the given {@link DragEvent} with the requirement to the icon's handles.
+   * adds the given {@link IconDragEvent} with the requirement to the icon's handles.
    *
    * @param consumer the consumer to add.
    * @param requirement the requirement to add.
@@ -249,13 +274,13 @@ public interface Icon {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  default Icon whenDrag(@NotNull final Consumer<DragEvent> consumer,
-                        @NotNull final Predicate<DragEvent> requirement) {
+  public Icon whenDrag(@NotNull final Consumer<IconDragEvent> consumer,
+                       @NotNull final Predicate<IconDragEvent> requirement) {
     return this.whenDrag(consumer, Collections.singletonList(requirement));
   }
 
   /**
-   * adds the given {@link DragEvent} with the requirements to the icon's handles.
+   * adds the given {@link IconDragEvent} with the requirements to the icon's handles.
    *
    * @param consumer the consumer to add.
    * @param requirements the requirements to add.
@@ -263,48 +288,8 @@ public interface Icon {
    * @return {@code this}, for chained calls.
    */
   @NotNull
-  default Icon whenDrag(@NotNull final Consumer<DragEvent> consumer,
-                        @NotNull final List<Predicate<DragEvent>> requirements) {
-    return this.handle(DragEvent.class, consumer, requirements);
-  }
-
-  /**
-   * adds the given {@link IconEvent} to the icon's handles.
-   *
-   * @param consumer the consumer to add.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  default Icon whenInteract(@NotNull final Consumer<IconEvent> consumer) {
-    return this.whenInteract(consumer, Collections.emptyList());
-  }
-
-  /**
-   * adds the given {@link IconEvent} with the requirement to the icon's handles.
-   *
-   * @param consumer the consumer to add.
-   * @param requirement the requirement to add.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  default Icon whenInteract(@NotNull final Consumer<IconEvent> consumer,
-                            @NotNull final Predicate<IconEvent> requirement) {
-    return this.whenInteract(consumer, Collections.singletonList(requirement));
-  }
-
-  /**
-   * adds the given {@link IconEvent} with the requirements to the icon's handles.
-   *
-   * @param consumer the consumer to add.
-   * @param requirements the requirements to add.
-   *
-   * @return {@code this}, for chained calls.
-   */
-  @NotNull
-  default Icon whenInteract(@NotNull final Consumer<IconEvent> consumer,
-                            @NotNull final List<Predicate<IconEvent>> requirements) {
-    return this.handle(IconEvent.class, consumer, requirements);
+  public Icon whenDrag(@NotNull final Consumer<IconDragEvent> consumer,
+                       @NotNull final List<Predicate<IconDragEvent>> requirements) {
+    return this.handle(IconDragEvent.class, consumer, requirements);
   }
 }

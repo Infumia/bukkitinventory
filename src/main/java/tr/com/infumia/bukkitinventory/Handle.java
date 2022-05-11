@@ -1,50 +1,29 @@
 package tr.com.infumia.bukkitinventory;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.jetbrains.annotations.NotNull;
-import tr.com.infumia.bukkitinventory.event.abs.SmartEvent;
-import tr.com.infumia.bukkitinventory.handle.BasicHandle;
+import tr.com.infumia.bukkitinventory.event.base.SmartEvent;
 
 /**
- * a class that handles and runs the given consumer after checking the requirements.
+ * a class that represents handles.
  *
+ * @param cls the cls.
+ * @param consumer the consumer.
+ * @param requirements the requirements.
  * @param <T> type of the event.
  */
-public interface Handle<T extends SmartEvent> extends Consumer<T>, Type<T> {
+public record Handle<T extends SmartEvent>(
+  @NotNull Class<T> cls,
+  @NotNull Consumer<T> consumer,
+  @NotNull List<Predicate<T>> requirements
+) implements Consumer<T> {
 
-  /**
-   * creates a simple handler.
-   *
-   * @param clazz the class to determine the type of the event.
-   * @param consumer the consumer to run.
-   * @param requirements the requirements to check.
-   * @param <T> type of the {@link SmartEvent}.
-   *
-   * @return a simple handler instance.
-   */
-  @NotNull
-  static <T extends SmartEvent> Handle<T> from(@NotNull final Class<T> clazz, @NotNull final Consumer<T> consumer,
-                                               @NotNull final List<Predicate<T>> requirements) {
-    return new BasicHandle<>(clazz, consumer, requirements);
-  }
-
-  /**
-   * creates a simple handler.
-   *
-   * @param clazz the class to determine the type of the event.
-   * @param consumer the consumer to run.
-   * @param requirements the requirements to check.
-   * @param <T> type of the {@link SmartEvent}.
-   *
-   * @return a simple handler instance.
-   */
-  @NotNull
-  @SafeVarargs
-  static <T extends SmartEvent> Handle<T> from(@NotNull final Class<T> clazz, @NotNull final Consumer<T> consumer,
-                                               @NotNull final Predicate<T>... requirements) {
-    return Handle.from(clazz, consumer, Arrays.asList(requirements));
+  @Override
+  public void accept(@NotNull final T t) {
+    if (this.requirements.stream().allMatch(req -> req.test(t))) {
+      this.consumer.accept(t);
+    }
   }
 }

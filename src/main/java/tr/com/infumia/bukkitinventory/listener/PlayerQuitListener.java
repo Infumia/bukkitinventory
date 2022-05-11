@@ -1,17 +1,21 @@
 package tr.com.infumia.bukkitinventory.listener;
 
-import lombok.RequiredArgsConstructor;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
 import tr.com.infumia.bukkitinventory.SmartInventory;
-import tr.com.infumia.bukkitinventory.event.PlyrQuitEvent;
+import tr.com.infumia.bukkitinventory.event.PlayerQuitedEvent;
 
 /**
  * a class that represents player quit listeners.
+ *
+ * @param plugin the plugin.
  */
-@RequiredArgsConstructor
-public final class PlayerQuitListener implements Listener {
+public record PlayerQuitListener(
+  @NotNull Plugin plugin
+) implements Listener {
 
   /**
    * listens the player quit event.
@@ -20,10 +24,13 @@ public final class PlayerQuitListener implements Listener {
    */
   @EventHandler
   public void onPlayerQuit(final PlayerQuitEvent event) {
-    SmartInventory.getHolder(event.getPlayer()).ifPresent(holder -> {
-      final var page = holder.getPage();
-      page.accept(new PlyrQuitEvent(holder.getContents(), event));
-      page.inventory().stopTick(event.getPlayer().getUniqueId());
-    });
+    final var holderOptional = SmartInventory.getHolder(event.getPlayer());
+    if (holderOptional.isEmpty()) {
+      return;
+    }
+    final var holder = holderOptional.get();
+    final var page = holder.page();
+    page.accept(new PlayerQuitedEvent(holder.context(), event, this.plugin));
+    page.inventory().stopTick(event.getPlayer().getUniqueId());
   }
 }
