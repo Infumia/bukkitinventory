@@ -56,7 +56,6 @@ tasks {
 
 repositories {
   mavenCentral()
-  maven(SNAPSHOTS)
   maven(PAPERMC)
   mavenLocal()
 }
