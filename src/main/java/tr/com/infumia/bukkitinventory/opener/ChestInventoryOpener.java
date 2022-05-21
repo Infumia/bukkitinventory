@@ -18,7 +18,7 @@ public final class ChestInventoryOpener implements InventoryOpener {
   @Override
   public Inventory open(@NotNull final InventoryContext context) {
     final var page = context.page();
-    Preconditions.checkArgument(page.column() != 9,
+    Preconditions.checkArgument(page.column() == 9,
       "The column count for the chest inventory must be 9, found: %s.", page.column());
     Preconditions.checkArgument(page.row() >= 1 || page.row() <= 6,
       "The row count for the chest inventory must be between 1 and 6, found: %s", page.row());
