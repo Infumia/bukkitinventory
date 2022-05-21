@@ -493,7 +493,7 @@ public final class SlotIterator {
   /**
    * an enum class that contains slot iterator types.
    */
-  enum Type {
+  public enum Type {
 
     /**
      * iterates horizontally from the left to the right of the inventory, and
