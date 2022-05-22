@@ -1,6 +1,5 @@
 plugins {
   java
-  `java-library`
   `maven-publish`
   signing
   checkstyle
@@ -61,8 +60,8 @@ repositories {
 }
 
 dependencies {
-  compileOnlyApi(lombokLibrary)
-  compileOnlyApi(annotationsLibrary)
+  compileOnly(lombokLibrary)
+  compileOnly(annotationsLibrary)
 
   annotationProcessor(lombokLibrary)
   annotationProcessor(annotationsLibrary)
@@ -73,7 +72,7 @@ dependencies {
   testAnnotationProcessor(lombokLibrary)
   testAnnotationProcessor(annotationsLibrary)
 
-  compileOnlyApi("io.papermc.paper:paper-api:1.18.2-R0.1-SNAPSHOT")
+  compileOnly("io.papermc.paper:paper-api:1.18.2-R0.1-SNAPSHOT")
 }
 
 publishing {
