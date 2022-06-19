@@ -207,10 +207,14 @@ public final class SmartInventory {
 
   /**
    * initiates the manager.
+   *
+   * @return registered listeners.
    */
-  public void init() {
-    SmartInventory.LISTENERS.apply(this.plugin).forEach(listener ->
-      Bukkit.getPluginManager().registerEvents(listener, this.plugin));
+  @NotNull
+  public List<Listener> init() {
+    final var listeners = SmartInventory.LISTENERS.apply(this.plugin);
+    listeners.forEach(listener -> Bukkit.getPluginManager().registerEvents(listener, this.plugin));
+    return listeners;
   }
 
   /**
